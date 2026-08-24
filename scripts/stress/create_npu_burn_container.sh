@@ -32,7 +32,9 @@ The script maps every host /dev/davinciN node into the container with the same
 host device-node ID, plus the required manager/devmm/HDC devices and validated
 Ascend driver/DCMI paths. CANN runtime and torch_npu stay inside the image and
 are never mounted from the host. NPU Burn logical IDs are derived separately
-from PCI topology. The container inherits environment variables from the image.
+from PCI topology. The bootstrap also declares the number of mapped device
+nodes so compatibility profiles can avoid inventing devices or parsing host
+CPU topology when the container intentionally exposes a subset.
 
 An existing matching stopped container is started. An existing mismatched
 container is never removed or replaced automatically.
@@ -120,6 +122,7 @@ for device_path in "${device_candidates[@]}"; do
 done
 [ "${#device_records[@]}" -gt 0 ] || die "no host /dev/davinciN device nodes were found"
 mapfile -t device_records < <(printf '%s\n' "${device_records[@]}" | sort -n -t $'\t' -k1,1)
+DEVICE_COUNT=${#device_records[@]}
 
 control_devices=(
     /dev/davinci_manager
@@ -161,6 +164,7 @@ profile_material=$(
         "$IMAGE_ID" "$RUNTIME" "$RESTART_POLICY" "$OUTPUT_DIR"
     printf 'privileged=true\nnetwork=host\nshm=64m\nworkdir=/workspace\n'
     printf 'security_opt=label=disable\nentrypoint=/bin/bash\n'
+    printf 'env=CATMONITOR_NPU_DEVICE_COUNT=%s\n' "$DEVICE_COUNT"
     for record in "${device_records[@]}"; do
         device_id=${record%%$'\t'*}
         printf 'device=/dev/davinci%s:/dev/davinci%s\n' "$device_id" "$device_id"
@@ -219,6 +223,7 @@ run_args=(
     --shm-size 64m
     --workdir /workspace
     --security-opt label=disable
+    --env "CATMONITOR_NPU_DEVICE_COUNT=$DEVICE_COUNT"
 )
 for record in "${device_records[@]}"; do
     device_id=${record%%$'\t'*}

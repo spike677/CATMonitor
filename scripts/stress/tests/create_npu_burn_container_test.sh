@@ -136,7 +136,8 @@ done
 assert_not_contains "$STATE_ROOT/run.args" '/dev/davinci2:/dev/davinci2'
 for required in \
     '--runtime' ascend '--restart' unless-stopped '--privileged' '--network' host '--shm-size' 64m \
-    '--workdir' /workspace '--security-opt' label=disable '--entrypoint' /bin/bash; do
+    '--workdir' /workspace '--security-opt' label=disable '--env' \
+    'CATMONITOR_NPU_DEVICE_COUNT=3' '--entrypoint' /bin/bash; do
     assert_contains "$STATE_ROOT/run.args" "$required"
 done
 assert_contains "$STATE_ROOT/run.args" "$OUTPUT_DIR:/opt/catmonitor/npuburn-home/.ascend_npu_burn/output:rw"
@@ -146,7 +147,6 @@ for forbidden_mount in \
     '/usr/local/Ascend/nnae'; do
     assert_not_contains "$STATE_ROOT/run.args" "$forbidden_mount"
 done
-assert_not_line "$STATE_ROOT/run.args" '--env'
 assert_not_line "$STATE_ROOT/run.args" '-e'
 
 run_calls_before=$(grep -c 'CALL <run>' "$STATE_ROOT/calls.log")
