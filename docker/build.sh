@@ -1,12 +1,64 @@
 #!/bin/sh
 set -e
 
-MODE=${1:-auto}
+MODE=
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 BUILD_DIR="$PROJECT_ROOT/docker/.build"
 DOCKER_BIN=${CATMONITOR_DOCKER_BIN:-docker}
 DOCKER_BUILD_NETWORK=${CATMONITOR_DOCKER_BUILD_NETWORK:-default}
+DEFAULT_DEBIAN_MIRROR=http://mirrors.aliyun.com/debian
+DEBIAN_MIRROR=
+
+usage() {
+    cat <<'EOF'
+Usage: docker/build.sh [auto|npu|generic] [OPTIONS]
+
+Options:
+  --debian-mirror URL  Debian repository root ending in /debian
+                       (default: http://mirrors.aliyun.com/debian)
+  -h, --help           Show this help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        auto|npu|generic)
+            if [ -n "$MODE" ]; then
+                echo "ERROR: build mode was specified more than once." >&2
+                exit 1
+            fi
+            MODE=$1
+            shift
+            ;;
+        --debian-mirror)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                echo "ERROR: --debian-mirror requires a URL." >&2
+                exit 1
+            fi
+            DEBIAN_MIRROR=$2
+            shift 2
+            ;;
+        --debian-mirror=*)
+            DEBIAN_MIRROR=${1#*=}
+            if [ -z "$DEBIAN_MIRROR" ]; then
+                echo "ERROR: --debian-mirror requires a URL." >&2
+                exit 1
+            fi
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "ERROR: unknown argument: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+MODE=${MODE:-auto}
 
 case "$DOCKER_BUILD_NETWORK" in
     default|host|none) ;;
@@ -20,6 +72,7 @@ esac
 PROXY_BUILD_ARGS=
 GO_BUILD_ARGS=
 GO_RUN_ENV_ARGS=
+DEBIAN_BUILD_ARGS=
 for proxy_name in HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
     eval "proxy_value=\${$proxy_name-}"
     if [ -n "$proxy_value" ]; then
@@ -41,6 +94,52 @@ fi
 if [ -n "$GO_BUILD_ARGS" ]; then
     echo "Go module environment: configured"
 fi
+# Auto-detect before resolving mode-specific build options.
+if [ "$MODE" = "auto" ]; then
+    if [ -d /usr/local/Ascend/driver ]; then
+        MODE=npu
+    else
+        MODE=generic
+    fi
+    echo "Auto-detected: $MODE"
+fi
+
+if [ "$MODE" = npu ]; then
+    DEBIAN_MIRROR=${DEBIAN_MIRROR:-$DEFAULT_DEBIAN_MIRROR}
+elif [ -n "$DEBIAN_MIRROR" ]; then
+    echo "ERROR: --debian-mirror currently applies only to the NPU Debian control image." >&2
+    exit 1
+fi
+
+
+if [ -n "$DEBIAN_MIRROR" ]; then
+    case "$DEBIAN_MIRROR" in
+        http://?*|https://?*) ;;
+        *)
+            echo "ERROR: --debian-mirror must use http:// or https://." >&2
+            exit 1
+            ;;
+    esac
+    mirror_location=${DEBIAN_MIRROR#*://}
+    mirror_location=${mirror_location%/}
+    case "$mirror_location" in
+        ''|*@*|*\?*|*\#*|*[[:space:]]*)
+            echo "ERROR: --debian-mirror must not contain credentials, query, fragment, or whitespace." >&2
+            exit 1
+            ;;
+    esac
+    case "$DEBIAN_MIRROR" in
+        */debian|*/debian/) ;;
+        *)
+            echo "ERROR: --debian-mirror must be a Debian repository root ending in /debian." >&2
+            exit 1
+            ;;
+    esac
+    DEBIAN_MIRROR=${DEBIAN_MIRROR%/}
+    export DEBIAN_MIRROR
+    DEBIAN_BUILD_ARGS="--build-arg DEBIAN_MIRROR"
+    echo "Debian package mirror: configured"
+fi
 
 cleanup_build_dir() {
     case "$BUILD_DIR" in
@@ -51,16 +150,6 @@ cleanup_build_dir() {
             ;;
     esac
 }
-
-# Auto-detect: check if Ascend driver is present
-if [ "$MODE" = "auto" ]; then
-    if [ -d /usr/local/Ascend/driver ]; then
-        MODE=npu
-    else
-        MODE=generic
-    fi
-    echo "Auto-detected: $MODE"
-fi
 
 case "$MODE" in
     npu)
@@ -98,7 +187,7 @@ case "$MODE" in
 
         echo "Step 2/2: Building runtime image (debian/glibc)..."
         # shellcheck disable=SC2086
-        "$DOCKER_BIN" build --network "$DOCKER_BUILD_NETWORK" $PROXY_BUILD_ARGS \
+        "$DOCKER_BIN" build --network "$DOCKER_BUILD_NETWORK" $PROXY_BUILD_ARGS $DEBIAN_BUILD_ARGS \
             -f docker/Dockerfile.npu \
             -t catmonitor-npu \
             "$PROJECT_ROOT"

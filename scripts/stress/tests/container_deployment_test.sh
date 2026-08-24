@@ -33,6 +33,8 @@ require_fixed docker/Dockerfile.generic 'apk add --no-cache'
 require_fixed docker/Dockerfile.generic '/opt/catmonitor/stress'
 require_fixed docker/Dockerfile.generic 'catmonitor-stress-cpu-client'
 require_fixed docker/Dockerfile.npu 'FROM debian:bookworm-slim'
+require_fixed docker/Dockerfile.npu 'ARG DEBIAN_MIRROR="http://mirrors.aliyun.com/debian"'
+require_fixed docker/Dockerfile.npu 'security_root="${root%/debian}/debian-security"'
 require_fixed docker/Dockerfile.npu 'docker.io'
 require_fixed docker/Dockerfile.npu 'COPY docker/.build/catmonitor /usr/local/bin/catmonitor'
 require_fixed docker/Dockerfile.npu '/opt/catmonitor/stress'
@@ -77,6 +79,8 @@ require_fixed docker/docker-compose.stress-npuburn.yml '/var/run/docker.sock'
 require_fixed docker/build.sh 'Docker build proxy: configured'
 require_fixed docker/build.sh 'Go module environment: configured'
 require_fixed docker/build.sh 'CATMONITOR_DOCKER_BUILD_NETWORK'
+require_fixed docker/build.sh '--debian-mirror'
+require_fixed docker/build.sh 'DEFAULT_DEBIAN_MIRROR=http://mirrors.aliyun.com/debian'
 require_fixed docker/build.sh 'run --rm --network "$DOCKER_BUILD_NETWORK"'
 require_fixed tests/e2e/stress_container_e2e_test.sh 'catmonitor-generic:latest'
 require_fixed tests/e2e/stress_container_e2e_test.sh 'CATMONITOR_CONTAINER_TEST_NPU_EXEC'
@@ -84,6 +88,28 @@ require_fixed tests/e2e/stress_container_e2e_test.sh 'CATMONITOR_CONTAINER_TEST_
 if grep -Fq 'goproxy.cn' "$REPO_ROOT/docker/build.sh"; then
     fail "container build must not hardcode a site-specific Go proxy"
 fi
+
+build_help=$(sh "$REPO_ROOT/docker/build.sh" --help)
+case "$build_help" in
+    *--debian-mirror*) ;;
+    *) fail "container build help does not expose --debian-mirror" ;;
+esac
+if ! CATMONITOR_DOCKER_BIN=/bin/true sh "$REPO_ROOT/docker/build.sh" generic >/dev/null; then
+    fail "generic container build no longer accepts the original no-option invocation"
+fi
+if CATMONITOR_DOCKER_BIN=/bin/true sh "$REPO_ROOT/docker/build.sh" generic \
+    --debian-mirror http://mirrors.aliyun.com/debian >/dev/null 2>&1; then
+    fail "generic container build accepted an NPU-only Debian mirror option"
+fi
+
+if invalid_mirror_output=$(sh "$REPO_ROOT/docker/build.sh" npu \
+    --debian-mirror https://repo.example.com/not-debian 2>&1); then
+    fail "container build accepted a Debian mirror URL without a /debian repository root"
+fi
+case "$invalid_mirror_output" in
+    *"ending in /debian"*) ;;
+    *) fail "container build returned an unclear invalid Debian mirror error" ;;
+esac
 
 if grep -Eq '^[[:space:]]*version:' "$REPO_ROOT/docker/docker-compose.yml"; then
     fail "base Compose file must not use the obsolete version key"

@@ -766,8 +766,23 @@ daemon 容器未使用 `--network host`，容器有自己的网络命名空间�
 
 ### Q: docker build 时 apt-get 很慢
 
-Dockerfile 默认使用 Debian 官方源，不要直接修改并提交站点专用镜像地址。控制镜像构建
-可由管理员临时设置代理，构建脚本只转发已存在的代理变量，不保存其值：
+NPU 控制镜像默认使用 `http://mirrors.aliyun.com/debian`，直接构建即可：
+
+```bash
+./docker/build.sh npu
+```
+
+可用正式参数覆盖为其他 Debian 仓库根地址，例如官方源：
+
+```bash
+./docker/build.sh npu --debian-mirror http://deb.debian.org/debian
+```
+
+镜像源 URL 必须以 `/debian` 结尾，且不能包含凭据、查询参数或片段。构建脚本会
+同时把 Debian security 仓库切换到同站点的 `/debian-security`。
+
+如果节点通过代理访问网络，也可由管理员临时设置代理；构建脚本只转发已存在的
+代理变量，不保存或打印其值：
 
 ```bash
 export HTTP_PROXY=http://proxy.example.com:3128
@@ -776,9 +791,8 @@ export HTTPS_PROXY=http://proxy.example.com:3128
 unset HTTP_PROXY HTTPS_PROXY
 ```
 
-CPU Runner clean build 还可显式使用
-`--debian-mirror https://mirror.example.com`；默认行为不变，override 会记录在 image
-manifest 中，并拒绝包含用户名或密码的 URL。
+CPU Runner clean build 继续使用它自己的 `--debian-mirror` 参数，override 会记录在
+image manifest 中。
 
 ## 14. dfee Prometheus Exporter + Grafana
 

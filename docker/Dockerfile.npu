@@ -2,7 +2,37 @@
 # Uses Debian (glibc) because libdcmi.so is glibc-linked and cannot run on Alpine (musl).
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ARG DEBIAN_MIRROR="http://mirrors.aliyun.com/debian"
+RUN if [ -n "${DEBIAN_MIRROR}" ]; then \
+      case "${DEBIAN_MIRROR}" in \
+        http://?*|https://?*) ;; \
+        *) echo "invalid DEBIAN_MIRROR" >&2; exit 2 ;; \
+      esac; \
+      mirror_location="${DEBIAN_MIRROR#*://}"; \
+      case "${mirror_location}" in \
+        ''|*@*|*\?*|*\#*|*[[:space:]]*) \
+          echo "invalid DEBIAN_MIRROR location" >&2; exit 2 ;; \
+      esac; \
+      case "${DEBIAN_MIRROR}" in \
+        */debian|*/debian/) ;; \
+        *) echo "DEBIAN_MIRROR must end in /debian" >&2; exit 2 ;; \
+      esac; \
+      root="${DEBIAN_MIRROR%/}"; \
+      security_root="${root%/debian}/debian-security"; \
+      for source_file in \
+        /etc/apt/sources.list \
+        /etc/apt/sources.list.d/*.list \
+        /etc/apt/sources.list.d/*.sources; do \
+        [ -f "${source_file}" ] || continue; \
+        sed -i \
+          -e "s#http://deb.debian.org/debian-security#${security_root}#g" \
+          -e "s#https://deb.debian.org/debian-security#${security_root}#g" \
+          -e "s#http://deb.debian.org/debian#${root}#g" \
+          -e "s#https://deb.debian.org/debian#${root}#g" \
+          "${source_file}"; \
+      done; \
+    fi \
+    && apt-get update && apt-get install -y --no-install-recommends \
     bash \
     docker.io \
     ipmitool \
