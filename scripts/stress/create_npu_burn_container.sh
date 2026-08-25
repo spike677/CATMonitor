@@ -251,7 +251,7 @@ printf 'Created NPU Burn container: %s\n' "$CONTAINER_NAME"
 printf 'Container ID: %s\n' "$CONTAINER_ID"
 printf 'Image: %s (%s)\n' "$IMAGE" "$IMAGE_ID"
 printf 'Restart policy: %s\n' "$RESTART_POLICY"
-printf 'Logical devices: '
+printf 'Device node IDs: '
 separator=
 for record in "${device_records[@]}"; do
     device_id=${record%%$'\t'*}

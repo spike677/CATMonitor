@@ -81,7 +81,7 @@ test-stress-deployment:
 	bash scripts/stress/tests/install_stress_runtime_test.sh
 	bash scripts/stress/tests/container_deployment_test.sh
 	bash scripts/stress/tests/catmonitor_install_test.sh
-	bash scripts/stress/tests/a2_r1_release_install_test.sh
+	bash scripts/stress/tests/a2_r1_manual_deployment_test.sh
 
 test-stress-audit:
 	bash scripts/stress/tests/audit_stress_release_test.sh

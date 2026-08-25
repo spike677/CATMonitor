@@ -6,8 +6,9 @@ CLI 参数解析与结果展示位于 `features/stress/cli` 子包，主程序�
 
 Ascend 910B4 A2 的稳定在线发行说明见
 [`configs/releases/a2-r1/ONLINE_INSTALL_GUIDE.md`](../../configs/releases/a2-r1/ONLINE_INSTALL_GUIDE.md)。
-该流程默认使用 Git + GHCR + installer；Golden Offline Acceptance Bundle 只在
-registry 不可用时作为 fallback。
+该流程以逐步骤 Manual / reference deployment 为主：用户显式获取镜像、生成配置并
+启动六个容器；scripts/catmonitor-install 仅作为可选 convenience wrapper。
+Online 与 Offline 只在镜像获取方式上不同。
 
 ```bash
 catmonitor stress -o table

@@ -1,21 +1,41 @@
 {
   "schema_version": 1,
   "release": "a2-r1",
-  "golden_source_commit": "e8c6f0ae4b2d0d7ba3c6a9d705533ed3a887e213",
-  "profile": "ascend-a2",
+  "status": "candidate",
+  "release_source_commit": null,
+  "golden_functional_base_commit": "e8c6f0ae4b2d0d7ba3c6a9d705533ed3a887e213",
+  "platform": {
+    "os": "linux",
+    "architecture": "arm64"
+  },
+  "profile": {
+    "name": "ascend-a2",
+    "chip_generation": "A2",
+    "soc": "Ascend910B4",
+    "cann": "8.3.RC2",
+    "torch_npu": "2.8.0",
+    "validated_device_nodes": [2, 5],
+    "npu_burn_logical_ids": [0, 1],
+    "default_npu_burn_device": 1
+  },
   "images": {
     "control": {
-      "name": "ghcr.io/spike677/catmonitor-npu:a2-r1",
-      "id": "sha256:f238d75fe8902a7ea39ec6c1261a674cb6446815116355f94b4b945b21a60424"
+      "registry": "ghcr.io/spike677/catmonitor-npu:a2-r1",
+      "local": "catmonitor/control:a2-r1",
+      "id": "sha256:f238d75fe8902a7ea39ec6c1261a674cb6446815116355f94b4b945b21a60424",
+      "registry_digest": null
     },
     "cpu_runner": {
-      "name": "ghcr.io/spike677/catmonitor-stress-cpu:a2-r1",
-      "id": "sha256:61e5a5f273684be3cdf18031ad742cf38bbe3512136b64c6e5f705f4356bd2aa"
+      "registry": "ghcr.io/spike677/catmonitor-stress-cpu-runner:a2-r1",
+      "local": "catmonitor/cpu-runner:a2-r1",
+      "id": "sha256:61e5a5f273684be3cdf18031ad742cf38bbe3512136b64c6e5f705f4356bd2aa",
+      "registry_digest": null
     },
     "npu_burn": {
-      "name": "ghcr.io/spike677/catmonitor-npuburn:a2-r1",
-      "id": "sha256:d23553954429c9c16e7f4bb1407b48c4b5bfa8c70b2d57b681245bc46e566160"
+      "registry": "ghcr.io/spike677/catmonitor-npuburn:a2-r1",
+      "local": "catmonitor/npuburn:a2-r1",
+      "id": "sha256:d23553954429c9c16e7f4bb1407b48c4b5bfa8c70b2d57b681245bc46e566160",
+      "registry_digest": null
     }
-  },
-  "offline_fallback": "/opt/catmonitor/releases/a2-r1"
+  }
 }

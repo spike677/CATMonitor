@@ -122,7 +122,7 @@ run_bootstrap() {
 
 run_bootstrap >"$TEST_ROOT/create.log"
 [ -d "$OUTPUT_DIR" ] || fail 'output directory was not created'
-assert_contains "$TEST_ROOT/create.log" 'Logical devices: 0,1,7'
+assert_contains "$TEST_ROOT/create.log" 'Device node IDs: 0,1,7'
 assert_contains "$TEST_ROOT/create.log" 'Restart policy: unless-stopped'
 for mapping in \
     "$HOST_ROOT/dev/davinci0:/dev/davinci0" \
