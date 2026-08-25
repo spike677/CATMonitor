@@ -81,6 +81,7 @@ test-stress-deployment:
 	bash scripts/stress/tests/install_stress_runtime_test.sh
 	bash scripts/stress/tests/container_deployment_test.sh
 	bash scripts/stress/tests/catmonitor_install_test.sh
+	bash scripts/stress/tests/a2_r1_release_install_test.sh
 
 test-stress-audit:
 	bash scripts/stress/tests/audit_stress_release_test.sh
@@ -107,4 +108,4 @@ install-installer:
 	install -m 0755 scripts/catmonitor-install "$(DESTDIR)$(PREFIX)/sbin/catmonitor-install"
 	install -m 0644 docker/docker-compose.yml docker/docker-compose.config.yml \
 		docker/docker-compose.npu.yml docker/docker-compose.stress.yml \
-		docker/docker-compose.stress-npuburn.yml "$(DESTDIR)$(PREFIX)/lib/catmonitor/docker/"
+		docker/docker-compose.stress-npuburn.yml docker/docker-compose.stress-web.yml "$(DESTDIR)$(PREFIX)/lib/catmonitor/docker/"

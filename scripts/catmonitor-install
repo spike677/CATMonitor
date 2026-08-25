@@ -21,6 +21,8 @@ DOCKER_BIN=${CATMONITOR_DOCKER_BIN:-docker}
 COMPOSE_DIR=${CATMONITOR_COMPOSE_DIR:-}
 PROJECT_NAME=${CATMONITOR_COMPOSE_PROJECT:-catmonitor}
 WEB_ADDR=${CATMONITOR_WEB_ADDR:-:19322}
+NPU_OUTPUT_DIR=${CATMONITOR_NPU_OUTPUT_DIR:-}
+IMAGE_PULL_POLICY=${CATMONITOR_IMAGE_PULL_POLICY:-missing}
 RUNNER_WAIT_SECONDS=60
 ACK_ROOT_DOCKER_SOCKET=false
 SKIP_DOCTOR=false
@@ -54,6 +56,10 @@ Options:
                              monitoring/CPU and catmonitor-npu for Ascend
   --cpu-runner-image IMAGE   Reviewed CPU runner image. When omitted, read it
                              from stress-deployment-manifest.json
+  --image-pull POLICY        Registry policy: missing, always or never
+                             (default: missing)
+  --npu-output-dir PATH      NPU Burn result directory mounted into the
+                             loopback operational Stress Web
   --docker-socket PATH       Docker socket for transitional NPU docker_exec
                              (default: /var/run/docker.sock)
   --acknowledge-root-docker-socket
@@ -87,6 +93,8 @@ while [ "$#" -gt 0 ]; do
         --state-dir) require_value "$@"; STATE_DIR=$2; shift 2 ;;
         --control-image) require_value "$@"; CONTROL_IMAGE=$2; shift 2 ;;
         --cpu-runner-image) require_value "$@"; CPU_RUNNER_IMAGE=$2; shift 2 ;;
+        --image-pull) require_value "$@"; IMAGE_PULL_POLICY=$2; shift 2 ;;
+        --npu-output-dir) require_value "$@"; NPU_OUTPUT_DIR=$2; shift 2 ;;
         --docker-socket) require_value "$@"; DOCKER_SOCKET=$2; shift 2 ;;
         --compose-dir) require_value "$@"; COMPOSE_DIR=$2; shift 2 ;;
         --docker-bin) require_value "$@"; DOCKER_BIN=$2; shift 2 ;;
@@ -106,6 +114,10 @@ case "$PROFILE" in
     *) die "unsupported profile: $PROFILE" ;;
 esac
 case "$ACTION" in plan|up|status|doctor|down) ;; *) die "unsupported action: $ACTION" ;; esac
+case "$IMAGE_PULL_POLICY" in
+    missing|always|never) ;;
+    *) die "--image-pull must be missing, always or never" ;;
+esac
 case "$PROJECT_NAME" in
     ''|*[!A-Za-z0-9_.-]*) die "--project-name contains unsupported characters" ;;
 esac
@@ -151,6 +163,8 @@ CONFIG_PATH=$(absolute_path --config "$CONFIG_PATH")
 STRESS_ROOT=$(absolute_path --stress-root "$STRESS_ROOT")
 STATE_DIR=$(absolute_path --state-dir "$STATE_DIR")
 DOCKER_SOCKET=$(absolute_path --docker-socket "$DOCKER_SOCKET")
+if [ -z "$NPU_OUTPUT_DIR" ]; then NPU_OUTPUT_DIR="$STATE_DIR/npu-burn-output"; fi
+NPU_OUTPUT_DIR=$(absolute_path --npu-output-dir "$NPU_OUTPUT_DIR")
 
 TEST_HOST_ROOT=${CATMONITOR_INSTALL_HOST_ROOT:-}
 if [ -n "$TEST_HOST_ROOT" ]; then
@@ -180,6 +194,7 @@ CONFIG_COMPOSE="$COMPOSE_DIR/docker-compose.config.yml"
 NPU_COMPOSE="$COMPOSE_DIR/docker-compose.npu.yml"
 STRESS_COMPOSE="$COMPOSE_DIR/docker-compose.stress.yml"
 NPU_BURN_COMPOSE="$COMPOSE_DIR/docker-compose.stress-npuburn.yml"
+STRESS_WEB_COMPOSE="$COMPOSE_DIR/docker-compose.stress-web.yml"
 
 for file in "$BASE_COMPOSE" "$CONFIG_COMPOSE"; do
     [ -f "$file" ] && [ ! -L "$file" ] || die "reviewed Compose file is unavailable: $file"
@@ -227,10 +242,11 @@ if [ "$is_stress" = true ]; then
     services=(cpu-stress-runner catmonitor web dfee)
 fi
 if [ "$is_ascend" = true ]; then
-    for file in "$NPU_COMPOSE" "$NPU_BURN_COMPOSE"; do
+    for file in "$NPU_COMPOSE" "$NPU_BURN_COMPOSE" "$STRESS_WEB_COMPOSE"; do
         [ -f "$file" ] && [ ! -L "$file" ] || die "reviewed Compose file is unavailable: $file"
     done
-    compose_files=("$BASE_COMPOSE" "$CONFIG_COMPOSE" "$NPU_COMPOSE" "$STRESS_COMPOSE" "$NPU_BURN_COMPOSE")
+    compose_files=("$BASE_COMPOSE" "$CONFIG_COMPOSE" "$NPU_COMPOSE" "$STRESS_COMPOSE" "$NPU_BURN_COMPOSE" "$STRESS_WEB_COMPOSE")
+    services=(cpu-stress-runner catmonitor web dfee stress-web)
 fi
 
 requires_runtime_assets=true
@@ -307,6 +323,28 @@ docker_cli() {
     fi
 }
 
+ensure_image() {
+    local image=$1 role=$2
+    if docker_cli image inspect "$image" >/dev/null 2>&1; then
+        if [ "$ACTION" = up ] && [ "$IMAGE_PULL_POLICY" = always ]; then
+            docker_cli pull "$image" >/dev/null || die "failed to pull $role image: $image"
+        fi
+        return 0
+    fi
+    if [ "$ACTION" = plan ]; then
+        [ "$IMAGE_PULL_POLICY" != never ] || die "$role image is unavailable locally: $image"
+        printf '  note: %s image will be pulled during up: %s\n' "$role" "$image" >&2
+        return 0
+    fi
+    if [ "$ACTION" = up ] && [ "$IMAGE_PULL_POLICY" != never ]; then
+        docker_cli pull "$image" >/dev/null || die "failed to pull $role image: $image"
+        docker_cli image inspect "$image" >/dev/null 2>&1 || \
+            die "$role image is unavailable after pull: $image"
+        return 0
+    fi
+    die "$role image is unavailable locally: $image"
+}
+
 if docker_cli compose version >/dev/null 2>&1; then
     compose_command=("$DOCKER_BIN" compose)
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -327,6 +365,7 @@ compose() {
         "CATMONITOR_CPU_STRESS_IMAGE=${CPU_RUNNER_IMAGE:-unused}"
         "CATMONITOR_DOCKER_SOCKET=$DOCKER_SOCKET"
         "CATMONITOR_WEB_ADDR=$WEB_ADDR"
+        "CATMONITOR_NPU_OUTPUT_DIR=$NPU_OUTPUT_DIR"
     )
     if [ -n "$DOCKER_HOST_OVERRIDE" ]; then environment+=("DOCKER_HOST=$DOCKER_HOST_OVERRIDE"); fi
     env "${environment[@]}" "${compose_command[@]}" "${compose_args[@]}" "$@"
@@ -344,16 +383,15 @@ host_path() {
 preflight() {
     docker_cli info >/dev/null 2>&1 || die "cannot access the Docker daemon with $DOCKER_BIN"
     if [ "$requires_runtime_assets" = true ]; then
-        docker_cli image inspect "$CONTROL_IMAGE" >/dev/null 2>&1 || \
-            die "control image is unavailable locally: $CONTROL_IMAGE"
+        ensure_image "$CONTROL_IMAGE" control
     fi
 
     if [ "$is_stress" = true ] && [ "$requires_runtime_assets" = true ]; then
-        docker_cli image inspect "$CPU_RUNNER_IMAGE" >/dev/null 2>&1 || \
-            die "CPU runner image is unavailable locally: $CPU_RUNNER_IMAGE"
+        ensure_image "$CPU_RUNNER_IMAGE" "CPU runner"
         if [ "$ACTION" = up ]; then
             [ ! -L "$STATE_DIR" ] || die "stress state directory cannot be a symbolic link: $STATE_DIR"
             install -d -m 0750 "$STATE_DIR" "$STATE_DIR/work" "$STATE_DIR/work/hpl" "$STATE_DIR/work/hpcg"
+            if [ "$is_ascend" = true ]; then install -d -m 0750 "$NPU_OUTPUT_DIR"; fi
         elif [ "$ACTION" != plan ]; then
             [ -d "$STATE_DIR" ] && [ ! -L "$STATE_DIR" ] || \
                 die "stress state directory is unavailable: $STATE_DIR"
@@ -363,6 +401,11 @@ preflight() {
     fi
 
     if [ "$is_ascend" = true ] && [ "$requires_runtime_assets" = true ]; then
+        ensure_image "$NPU_IMAGE" "NPU Burn"
+        if [ "$ACTION" != plan ]; then
+            [ -d "$NPU_OUTPUT_DIR" ] && [ ! -L "$NPU_OUTPUT_DIR" ] || \
+                die "NPU output directory is unavailable: $NPU_OUTPUT_DIR"
+        fi
         for required in \
             /usr/local/Ascend/driver \
             /usr/local/Ascend/nnae \
@@ -407,6 +450,7 @@ print_plan() {
     if [ "$is_ascend" = true ]; then
         printf '  NPU generation: %s\n' "$expected_generation"
         printf '  fixed NPU container: %s (%s)\n' "${NPU_CONTAINER:-not required for $ACTION}" "${NPU_IMAGE:-not required for $ACTION}"
+        printf '  NPU output: %s\n' "$NPU_OUTPUT_DIR"
         printf '  Docker socket: %s (root-equivalent compatibility boundary)\n' "$DOCKER_SOCKET"
     else
         printf '  Docker socket: not mounted\n'

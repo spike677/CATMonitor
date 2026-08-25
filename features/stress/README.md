@@ -4,6 +4,11 @@
 运行 STREAM、HPL、HPCG 或 Ascend NPU Burn，不进入 daemon 周期，也不直接修改健康总分。
 CLI 参数解析与结果展示位于 `features/stress/cli` 子包，主程序只挂载 `stress` 命令。
 
+Ascend 910B4 A2 的稳定在线发行说明见
+[`configs/releases/a2-r1/ONLINE_INSTALL_GUIDE.md`](../../configs/releases/a2-r1/ONLINE_INSTALL_GUIDE.md)。
+该流程默认使用 Git + GHCR + installer；Golden Offline Acceptance Bundle 只在
+registry 不可用时作为 fallback。
+
 ```bash
 catmonitor stress -o table
 catmonitor stress doctor -o table

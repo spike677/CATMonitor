@@ -46,15 +46,25 @@ touch "$HOST_ROOT/usr/bin/hccn_tool" "$HOST_ROOT/usr/local/sbin/npu-smi" \
 cat >"$FAKE_DOCKER" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'DOCKER_HOST=%s CATMONITOR_WEB_ADDR=%s command=%s\n' \
-    "${DOCKER_HOST-}" "${CATMONITOR_WEB_ADDR-}" "$*" >>"${CATMONITOR_TEST_DOCKER_LOG:?}"
+printf 'DOCKER_HOST=%s CATMONITOR_WEB_ADDR=%s CATMONITOR_NPU_OUTPUT_DIR=%s command=%s\n' \
+    "${DOCKER_HOST-}" "${CATMONITOR_WEB_ADDR-}" "${CATMONITOR_NPU_OUTPUT_DIR-}" "$*" >>"${CATMONITOR_TEST_DOCKER_LOG:?}"
 
 if [ "${1-}" = compose ] && [ "${2-}" = version ]; then
     printf 'Docker Compose version fixture\n'
     exit 0
 fi
 if [ "${1-}" = info ]; then exit 0; fi
-if [ "${1-}" = image ] && [ "${2-}" = inspect ]; then exit 0; fi
+if [ "${1-}" = image ] && [ "${2-}" = inspect ]; then
+    if [ "${CATMONITOR_TEST_IMAGES_MISSING:-}" = true ] && \
+        [ ! -f "${CATMONITOR_TEST_PULL_MARKER:?}" ]; then
+        exit 1
+    fi
+    exit 0
+fi
+if [ "${1-}" = pull ]; then
+    [ -n "${CATMONITOR_TEST_PULL_MARKER:-}" ] && : >"$CATMONITOR_TEST_PULL_MARKER"
+    exit 0
+fi
 if [ "${1-}" = container ] && [ "${2-}" = inspect ]; then
     printf 'true|true|catmonitor/npuburn:test\n'
     exit 0
@@ -94,6 +104,8 @@ common_args=(
 CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" bash "$INSTALLER" --help >"$TEST_ROOT/help.out"
 assert_contains "$TEST_ROOT/help.out" 'catmonitor-install --profile PROFILE'
 assert_contains "$TEST_ROOT/help.out" 'does not build images or benchmarks'
+assert_contains "$TEST_ROOT/help.out" '--image-pull POLICY'
+assert_contains "$TEST_ROOT/help.out" '--npu-output-dir PATH'
 
 assert_fails env CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" \
     bash "$INSTALLER" "${common_args[@]}" --action plan
@@ -149,6 +161,8 @@ env "${ascend_env[@]}" bash "$INSTALLER" \
     --profile ascend-a3 --action plan "${common_args[@]}" >"$TEST_ROOT/a3-plan.out"
 assert_contains "$TEST_ROOT/a3-plan.out" 'NPU generation: A3'
 assert_contains "$TEST_ROOT/a3-plan.out" 'root-equivalent compatibility boundary'
+assert_contains "$TEST_ROOT/a3-plan.out" 'docker-compose.stress-web.yml'
+assert_contains "$TEST_ROOT/a3-plan.out" 'NPU output:'
 assert_contains "$TEST_ROOT/a3-plan.out" 'note: Ascend up requires --acknowledge-root-docker-socket'
 
 assert_fails env "${ascend_env[@]}" bash "$INSTALLER" \
@@ -161,6 +175,9 @@ env "${ascend_env[@]}" bash "$INSTALLER" \
 assert_contains "$TEST_ROOT/a3-up.out" 'CATMonitor profile is up: ascend-a3'
 assert_contains "$DOCKER_LOG" 'docker-compose.npu.yml'
 assert_contains "$DOCKER_LOG" 'docker-compose.stress-npuburn.yml'
+assert_contains "$DOCKER_LOG" 'docker-compose.stress-web.yml'
+assert_contains "$DOCKER_LOG" 'up -d cpu-stress-runner catmonitor web dfee stress-web'
+assert_contains "$DOCKER_LOG" 'CATMONITOR_NPU_OUTPUT_DIR='
 assert_contains "$DOCKER_LOG" 'DOCKER_HOST=unix:///run/docker.sock'
 
 assert_fails env "${ascend_env[@]}" bash "$INSTALLER" \
@@ -170,6 +187,20 @@ assert_fails env CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" \
     bash "$INSTALLER" --profile monitoring --action plan --web-addr not-an-address \
     "${common_args[@]}"
 assert_contains "$TEST_ROOT/unexpected.err" 'must be a valid host:port listen address'
+assert_fails env CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" \
+    bash "$INSTALLER" --profile monitoring --action plan --image-pull invalid \
+    "${common_args[@]}"
+assert_contains "$TEST_ROOT/unexpected.err" '--image-pull must be missing, always or never'
+
+PULL_MARKER="$TEST_ROOT/pulled.marker"
+rm -f -- "$PULL_MARKER"
+env CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" \
+    CATMONITOR_TEST_IMAGES_MISSING=true CATMONITOR_TEST_PULL_MARKER="$PULL_MARKER" \
+    bash "$INSTALLER" --profile monitoring --action up \
+    --control-image ghcr.io/example/catmonitor:release --image-pull missing \
+    "${common_args[@]}" >"$TEST_ROOT/registry-pull.out"
+[ -f "$PULL_MARKER" ] || fail 'installer did not pull a missing registry image'
+assert_contains "$DOCKER_LOG" 'pull ghcr.io/example/catmonitor:release'
 
 # Recovery actions must remain available even when config/assets are missing.
 CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" bash "$INSTALLER" \
@@ -187,6 +218,8 @@ INSTALLED_INSTALLER="$PACKAGE_ROOT/usr/local/sbin/catmonitor-install"
 [ -x "$INSTALLED_INSTALLER" ] || fail 'packaged catmonitor-install is not executable'
 [ -f "$PACKAGE_ROOT/usr/local/lib/catmonitor/docker/docker-compose.config.yml" ] || \
     fail 'packaged Compose definitions are incomplete'
+[ -f "$PACKAGE_ROOT/usr/local/lib/catmonitor/docker/docker-compose.stress-web.yml" ] || \
+    fail 'packaged operational Stress Web definition is missing'
 CATMONITOR_TEST_DOCKER_LOG="$DOCKER_LOG" bash "$INSTALLED_INSTALLER" \
     --profile monitoring --action plan --config "$CONFIG" \
     --docker-bin "$FAKE_DOCKER" >"$TEST_ROOT/installed-plan.out"
