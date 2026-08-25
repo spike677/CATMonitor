@@ -33,7 +33,7 @@ git fetch --all --tags --prune
 git checkout a2-r1
 ~~~
 
-正式 tag 创建前，候选验收可显式 checkout release/a2-r1，但不能把候选分支当作最终发行标签。
+`a2-r1` 是正式发行标签；`release/a2-r1` 分支仅保留发行准备历史，不作为用户安装入口。
 
 ## 3. Verify source revision
 
@@ -49,11 +49,13 @@ test -f "$RELEASE_METADATA"
 git rev-parse HEAD
 ~~~
 
-Phase E 前 release.json 保持 candidate 且 release_source_commit 为 null。
+`release.json` 中的 `release_source_commit` 固定记录 Phase E 已验收的源码冻结提交；当前 tag 额外包含本次发行 metadata 收尾。
 
 ## 4. Pull three images
 
 在线：
+
+三张 a2-r1 GHCR Package 均为 Public，拉取时无需执行 `docker login`，也不需要 GitHub PAT。
 
 ~~~bash
 CONTROL_REGISTRY=ghcr.io/spike677/catmonitor-npu:a2-r1

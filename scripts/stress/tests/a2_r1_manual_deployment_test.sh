@@ -20,6 +20,7 @@ for section in $(seq 1 24); do
 done
 
 assert_contains "$GUIDE" 'docker pull "$CONTROL_REGISTRY"'
+assert_contains "$GUIDE" '拉取时无需执行 `docker login`'
 assert_contains "$GUIDE" 'docker load -i /path/to/control.tar'
 assert_contains "$GUIDE" 'generate_stress_deployment.sh'
 assert_contains "$GUIDE" 'install_stress_runtime.sh'
@@ -79,13 +80,16 @@ with open(sys.argv[1], encoding="utf-8") as handle:
 
 assert data["schema_version"] == 1
 assert data["release"] == "a2-r1"
-assert data["status"] == "candidate"
-assert data["release_source_commit"] is None
+assert data["status"] == "released"
+assert data["release_source_commit"] == "2ad450c2ecf8fa10e2bff64b250cdfe3bf1c6996"
 assert data["golden_functional_base_commit"] == "e8c6f0ae4b2d0d7ba3c6a9d705533ed3a887e213"
 assert data["platform"] == {"os": "linux", "architecture": "arm64"}
 assert data["images"]["control"]["id"] == "sha256:f238d75fe8902a7ea39ec6c1261a674cb6446815116355f94b4b945b21a60424"
 assert data["images"]["cpu_runner"]["id"] == "sha256:61e5a5f273684be3cdf18031ad742cf38bbe3512136b64c6e5f705f4356bd2aa"
 assert data["images"]["npu_burn"]["id"] == "sha256:d23553954429c9c16e7f4bb1407b48c4b5bfa8c70b2d57b681245bc46e566160"
+assert data["images"]["control"]["registry_digest"] == "sha256:8d213f304e96c86f721050a153e42d1857e5214e464be3423633b56531d91cd2"
+assert data["images"]["cpu_runner"]["registry_digest"] == "sha256:8cd0416bb4e39a22fbc9475f17c733427b2f738e61b034902f723833b2a77e1e"
+assert data["images"]["npu_burn"]["registry_digest"] == "sha256:a837138704c64eaa72050ab7b0f0ba419c81c83ff6e713f37678dd9aae773da6"
 assert data["images"]["cpu_runner"]["registry"] == "ghcr.io/spike677/catmonitor-stress-cpu-runner:a2-r1"
 assert data["profile"]["validated_device_nodes"] == [2, 5]
 assert data["profile"]["npu_burn_logical_ids"] == [0, 1]
