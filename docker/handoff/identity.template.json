@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "kind": "template_not_live_inventory",
+  "instructions": "Copy outside the Git repository and complete from a fresh read-only inventory. Do not commit node-specific identity, credentials or acceptance evidence.",
+  "source": {
+    "expected_commit": "c1821ca4fa2eec53eb2605dc263561c6076421d0",
+    "actual_commit": null,
+    "source_root": null,
+    "tree_state": "NOT_CHECKED"
+  },
+  "guide": {
+    "revision": "manual-c1821ca-r2-handoff",
+    "public_copy": "docker/handoff/guide/README-npu.md",
+    "public_copy_sha256": "e41a9d5f25755024955c2ca2e848bbb291bbfb40c36d300d669e26d76346b04f",
+    "original_r1_sha256": "799161bd48f229b84d534a060e2231b5c11aa1868e00a59a58fc36c49e593cec",
+    "public_copy_delta": "Source path and reference links only; deployment commands unchanged from r2.",
+    "actual_sha256": null
+  },
+  "deployment_delta": [
+    "bounded ready/snapshot JSON wait",
+    "NPU --init / Compose init:true; real workload reaping not yet independently validated",
+    "explicit test Docker socket bind source"
+  ],
+  "expected_images": [
+    {
+      "ref": "ghcr.io/spike677/catmonitor-npu:arm64-v0.3.5-stress",
+      "image_id": "sha256:278ed943dbae16c7a0fb5d6d1eb3ae0a61444f5aa543571c8afc43a21ed98521",
+      "registry_digests": [
+        "ghcr.io/spike677/catmonitor-npu@sha256:4a86d3dedd27ee616911208b7d8730f8b745eec5948bc4e6bb68b8044012df40"
+      ],
+      "platform": "linux/arm64"
+    },
+    {
+      "ref": "ghcr.io/spike677/catmonitor-stress-cpu:arm64-v0.3.5-stress",
+      "image_id": "sha256:ed2a91fefd06033ebd75cd47786624d8e0edc1b3234d70310bbe60b47660d586",
+      "registry_digests": [
+        "ghcr.io/spike677/catmonitor-stress-cpu@sha256:584b59a27d9debff4fe662cb73b0117489f89e06b545a9b38e123065bdafbfb9"
+      ],
+      "platform": "linux/arm64"
+    },
+    {
+      "ref": "ghcr.io/spike677/catmonitor-stress-npu:arm64-v0.3.5-stress",
+      "image_id": "sha256:9509425e7bf3b36458c521176fab2935ade06f939f7f4f601001903ac9b92f90",
+      "registry_digests": [
+        "ghcr.io/spike677/catmonitor-stress-npu@sha256:e1ad80f88fe8826440e0ced798d6cc4c54c45c44b472db48e8fce5f5368e9f25"
+      ],
+      "platform": "linux/arm64"
+    }
+  ],
+  "actual_images": [],
+  "images_verified": false,
+  "checked_at": null,
+  "ssh": {
+    "host": null,
+    "port": null,
+    "user": null,
+    "authorized_config_or_key_path": null,
+    "terminal_environment": null,
+    "host_key_checking": "required",
+    "claude_connection_verified": false
+  },
+  "test": {
+    "root": null,
+    "source_dir": null,
+    "docker_socket": null,
+    "docker_root": null,
+    "docker_config": null,
+    "daemon_pid": null,
+    "daemon_cmdline": null,
+    "daemon_network_namespace": null,
+    "host_network_namespace": null,
+    "shares_host_network": null,
+    "init_binary": null,
+    "init_sha256": null,
+    "containers": null,
+    "volumes": null,
+    "current_run_generated_config": null,
+    "current_run_reports": null
+  },
+  "allowed_resources": {
+    "container_names": [
+      "catmonitor",
+      "catmonitor-web",
+      "catmonitor-dfee",
+      "catmonitor-stress-cpu",
+      "catmonitor-stress-npu"
+    ],
+    "volume_names": [
+      "cm-snapshot",
+      "cm-data",
+      "cm-straggler",
+      "cm-control",
+      "cm-csv",
+      "cm-stress-cpu-state",
+      "cm-stress-npu-state"
+    ],
+    "current_run_root": null,
+    "notes": "Only resources created in this run on the verified test endpoint are authorized. Names alone are not sufficient."
+  },
+  "protected_resources": [],
+  "resources": {
+    "installation_preparation_ready": false,
+    "cpu_load_permission": "NOT_CONFIRMED",
+    "cpu_resource_available": "NOT_CHECKED",
+    "reserved_cpu_budget": null,
+    "reserved_memory_budget": null,
+    "npu_load_permission": "NOT_CONFIRMED",
+    "npu_resource_available": "NOT_CHECKED",
+    "host_device_nodes": [],
+    "available_npu_test_devices": [],
+    "maintenance_window_confirmed": false,
+    "resource_check_time": null
+  },
+  "access": {
+    "web": null,
+    "stress_web": null,
+    "dfee": null,
+    "metrics": null,
+    "browser_location": null,
+    "approved_tunnel_instructions": null
+  },
+  "known_limitations": [
+    "Record first ready and first valid snapshot observation separately from sampling delay.",
+    "New state stress status can exit1 with no stress report; not a doctor failure.",
+    "NPU natural-exit and cancel reaping require same-container workload validation.",
+    "HTTP success does not prove visual UI or button interaction."
+  ],
+  "handoff": {
+    "ready": false,
+    "codex_executed_deployment": false,
+    "codex_executed_workload": false
+  }
+}

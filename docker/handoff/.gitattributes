@@ -1,0 +1,2 @@
+# Frozen handoff checksums must be stable on Windows and Linux.
+* text eol=lf
