@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "instructions": "Fill a copy outside Git using verified facts. Do not store credentials. Null means unverified, not PASS.",
+  "source_commit": null,
+  "ssh_verified_alias_or_command": null,
+  "test": {
+    "source_dir": null,
+    "docker_socket": null,
+    "docker_data_root": null,
+    "network_isolation": null,
+    "config_state_output_dirs": [],
+    "container_names": [],
+    "browser_entry": null,
+    "protected_resources": []
+  },
+  "images": {
+    "control": { "ref": null, "digest": null, "image_id": null, "platform": null, "compatibility": "NOT_CHECKED" },
+    "cpu": { "ref": null, "digest": null, "image_id": null, "platform": null, "compatibility": "NOT_CHECKED" },
+    "a3_npu": { "ref": null, "digest": null, "image_id": null, "platform": null, "compatibility": "NOT_CHECKED" }
+  },
+  "resources": {
+    "checked_at": null,
+    "cpu_and_memory_budget": null,
+    "npu_host_nodes": [],
+    "authorized_idle_logical_ids": [],
+    "mapping_evidence": null,
+    "load_permission_confirmed": false
+  },
+  "deployment_ready": false
+}

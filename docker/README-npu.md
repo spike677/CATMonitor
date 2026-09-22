@@ -1,5 +1,9 @@
 # CATMonitor：Ascend NPU 节点
 
+> 在已有服务的 A3 节点进行独立安装验收，请先阅读
+> [A3 独立测试交接入口](a3-independent-test/README.md)。本页 A2 镜像及全设备示例
+> 不能直接用于 A3；先核对镜像、同机隔离和资源授权，再冻结实际命令。
+
 适用于 Ascend NPU Linux 节点。支持 Ascend Monitoring、可选 CPU Stress 和可选
 NPU Burn。当前 Stress 镜像只声明已完成 A2/Ascend910B4、CANN 8.3、`runc` 的功能验收；
 其他 SoC/CANN 组合必须单独验收，不能由 A2 结果外推。
