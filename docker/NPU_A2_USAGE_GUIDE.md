@@ -1,6 +1,8 @@
 # CATMonitor A2 NPU Burn 部署与管理员使用指南
 
-本指南是 [五页使用 PPT](presentations/CATMonitor_A2_NPU_Burn_使用指南.pptx) 的完整命令版，覆盖镜像下载、Compose 部署、按作业选卡选算子、外部配置、Web 模型参考与 SDC，以及管理员启停压测。
+本指南是 [九页使用 PPT（含可编辑流程图）](presentations/CATMonitor_A2_NPU_Burn_使用指南.pptx) 的完整命令版，覆盖镜像下载、Compose 部署、按作业选卡选算子、外部配置、Web 模型参考与 SDC，以及管理员启停压测。
+
+PPT 前五页保留功能、下载、部署、参数及真实 A2 页面说明；第 6–9 页分别展示部署与首次作业验收、功能代码修改与镜像更新、三类配置的生效方式、管理员开启与关闭压测。流程图区分重编镜像、重建容器和仅对本次 Job 生效，不表示新增 A3 实机验收已经通过。
 
 适用范围：Linux/ARM64、Ascend A2，配套代码基线 `5a3537cfc0cd1420c5e63bb4991e72c832781eca`。镜像和命令核对日期为 2026-10-14。这是一套候选版本使用说明，不是 A3 兼容认证或正式版本发布声明。分支名称含 `a3-migration`，不代表下文 A2 workload 镜像适用于 A3。
 

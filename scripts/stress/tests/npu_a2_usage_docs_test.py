@@ -48,7 +48,7 @@ class A2UsageGuideTest(unittest.TestCase):
     def test_ppt_and_no_secrets(self):
         with zipfile.ZipFile(PPT) as archive:
             slides = [n for n in archive.namelist() if re.fullmatch(r"ppt/slides/slide\d+.xml", n)]
-            self.assertEqual(len(slides), 5)
+            self.assertEqual(len(slides), 9)
             xml_text = []
             for name in archive.namelist():
                 if name.endswith(".xml"):
@@ -57,6 +57,25 @@ class A2UsageGuideTest(unittest.TestCase):
         # Report only the presence of a match, never a potential credential.
         self.assertIsNone(re.search(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN .*PRIVATE KEY-----)", material),
                           "Potential credential in publication material")
+
+    def test_editable_process_diagrams(self):
+        ns = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+              "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+        titles = (
+            "部署流程：配套交付到首次作业",
+            "压测功能修改：代码、测试与镜像更新",
+            "压测配置调整：三种生效方式",
+            "管理员启停：功能开关与任务取消",
+        )
+        with zipfile.ZipFile(PPT) as archive:
+            for number, title in enumerate(titles, 6):
+                slide = ET.fromstring(archive.read(f"ppt/slides/slide{number}.xml"))
+                text = "\n".join(node.text or "" for node in slide.findall(".//a:t", ns))
+                self.assertIn(title, text)
+                self.assertGreaterEqual(len(slide.findall(".//p:cxnSp", ns)), 3,
+                                        f"Slide {number} requires editable flow connectors")
+                self.assertGreaterEqual(len(slide.findall(".//p:sp", ns)), 8,
+                                        f"Slide {number} requires editable diagram content")
 
     @unittest.skipUnless(BASH, "Bash syntax checks require a POSIX test host")
     def test_bash_syntax(self):
