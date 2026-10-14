@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check the A2 companion guide without Docker, network, or NPU workloads."""
 import os
+import json
 from pathlib import Path
 import re
 import shutil
@@ -14,24 +15,53 @@ ROOT = Path(__file__).resolve().parents[3]
 GUIDE = ROOT / "docker/NPU_A2_USAGE_GUIDE.md"
 PPT = ROOT / "docker/presentations/CATMonitor_A2_NPU_Burn_使用指南.pptx"
 TEXT = GUIDE.read_text(encoding="utf-8")
-BLOCKS = re.findall(r"^```bash\n(.*?)^```", TEXT, re.M | re.S)
+TRANSFER = ROOT / "docker/A2_NODE_TRANSFER_GUIDE.md"
+TRANSFER_TEXT = TRANSFER.read_text(encoding="utf-8")
+GUIDE_BLOCKS = re.findall(r"^```bash\n(.*?)^```", TEXT, re.M | re.S)
+TRANSFER_BLOCKS = re.findall(r"^```bash\n(.*?)^```", TRANSFER_TEXT, re.M | re.S)
+BLOCKS = GUIDE_BLOCKS + TRANSFER_BLOCKS
 BASH = shutil.which("bash") if os.name == "posix" else None
 
 
 class A2UsageGuideTest(unittest.TestCase):
     def test_markdown_and_links(self):
-        self.assertEqual(len(re.findall(r"^```", TEXT, re.M)) % 2, 0)
         self.assertGreater(len(BLOCKS), 15)
-        for path in re.findall(r"\]\(([^)]+)\)", TEXT):
-            if not path.startswith(("https://", "http://", "#")):
-                self.assertTrue((GUIDE.parent / path.split("#")[0]).is_file(), path)
+        for guide, material in ((GUIDE, TEXT), (TRANSFER, TRANSFER_TEXT)):
+            self.assertEqual(len(re.findall(r"^```", material, re.M)) % 2, 0)
+            for path in re.findall(r"\]\(([^)]+)\)", material):
+                if not path.startswith(("https://", "http://", "#")):
+                    self.assertTrue((guide.parent / path.split("#")[0]).is_file(), path)
 
     def test_generator_options_are_real(self):
         source = (ROOT / "scripts/stress/generate_stress_deployment.sh").read_text()
         help_text = source.split("Usage:", 1)[1].split("EOF", 1)[0]
-        command = next(b for b in BLOCKS if "bash scripts/stress/generate_stress_deployment.sh" in b)
-        for option in re.findall(r"(?<!\S)--[a-z][a-z-]*", command):
-            self.assertIn(option, help_text, option)
+        for command in BLOCKS:
+            if "bash scripts/stress/generate_stress_deployment.sh" not in command:
+                continue
+            command = command[command.index("bash scripts/stress/generate_stress_deployment.sh"):]
+            command = command.split("\n\n", 1)[0]
+            for option in re.findall(r"(?<!\S)--[a-z][a-z-]*", command):
+                self.assertIn(option, help_text, option)
+
+    def test_transfer_identity_and_non_destructive_scope(self):
+        shells = "\n".join(TRANSFER_BLOCKS)
+        for part in ("docker inspect --format '{{.Image}}'", "docker diff", "docker save",
+                     "docker load", "image-ids.tsv", 'test -z "$(git -C "$SOURCE_DIR" status --porcelain)"',
+                     "docker image inspect -f '{{.Id}}'", "sha256sum -c SHA256SUMS",
+                     '--npu-chip-generation A2', '--npu-allowed-devices "$ALLOWED_DEVICES"',
+                     '--npu-config-dir "$DEPLOY/npu-config"', "dc up -d --no-build --pull never",
+                     'image: $WEB', 'image: $DFEE', "--require-pass", "set -euo pipefail",
+                     "model-action create_reference", "model-action compare"):
+            self.assertIn(part, shells)
+        for forbidden in ("docker build", "docker commit", "docker export", "docker import",
+                          "docker stop", "docker rm", "docker rename", "docker system prune",
+                          "--chip-generation A3", "--npu-chip-generation A3", "cann-9.1",
+                          "v0.23.0rc1-a3", "docker/build.sh", "build_npu_burn_image.sh",
+                          "--npu-device-nodes 2,5"):
+            self.assertNotIn(forbidden, shells)
+        for part in ("不隔离 host 网络端口", "NOT_RUN/PENDING", "镜像 save 不含这些修改",
+                     "参考不从 85 复制", "85 始终不停止"):
+            self.assertIn(part, TRANSFER_TEXT)
 
     def test_compose_and_admin_contract(self):
         for part in ("docker/docker-compose.yml", "docker/docker-compose.npu.yml",
@@ -53,7 +83,7 @@ class A2UsageGuideTest(unittest.TestCase):
             for name in archive.namelist():
                 if name.endswith(".xml"):
                     xml_text.append("".join(ET.fromstring(archive.read(name)).itertext()))
-        material = TEXT + "\n".join(xml_text)
+        material = TEXT + TRANSFER_TEXT + "\n".join(xml_text)
         # Report only the presence of a match, never a potential credential.
         self.assertIsNone(re.search(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN .*PRIVATE KEY-----)", material),
                           "Potential credential in publication material")
@@ -122,6 +152,48 @@ class A2UsageGuideTest(unittest.TestCase):
                 self.assertIn("snapshot:\n  enabled: true", content)
                 self.assertIn("stream: { enabled: true", content)
             self.assertIn("stress:\n  enabled: false", content)
+
+    @unittest.skipUnless(BASH, "Transfer generator fixture requires a POSIX test host")
+    def test_transfer_generator_discovers_target_devices(self):
+        block = next(b for b in TRANSFER_BLOCKS if "bash scripts/stress/generate_stress_deployment.sh" in b)
+        command = block[block.index("bash scripts/stress/generate_stress_deployment.sh"):]
+        command = command.split("\n\n", 1)[0]
+        self.assertNotIn("docker ", command)
+        for ids, security in (((2, 5), "legacy-privileged"), ((0, 3, 7), "restricted")):
+            with self.subTest(ids=ids, security=security), tempfile.TemporaryDirectory(prefix="a2-transfer-guide-") as temp:
+                root = Path(temp)
+                host = root / "host"
+                for directory in ("usr/local/Ascend/driver/lib64", "usr/local/dcmi"):
+                    (host / directory).mkdir(parents=True)
+                for file in tuple(f"dev/davinci{i}" for i in ids) + (
+                        "dev/davinci_manager", "dev/devmm_svm", "dev/hisi_hdc",
+                        "usr/local/Ascend/driver/version.info", "etc/ascend_install.info", "usr/local/bin/npu-smi"):
+                    target = host / file
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.touch()
+                shutil.copytree(ROOT / "third_party/ascend_npu_burn/source/ascend_npu_burn/config", root / "npu-config")
+                env = dict(os.environ, G=str(root / "generated"), DEPLOY=str(root), OUT=str(root / "output"),
+                           FIXTURE_HOST=str(host), CONTROL="example/control:fixture", CPU="example/cpu:fixture",
+                           NPU="example/npu:fixture", CPU_CONTAINER="a2-transfer-cpu", NPU_CONTAINER="a2-transfer-npu",
+                           ONE_DEVICE="0", ALLOWED_DEVICES="0,1", NPU_MEMORY_MODE="checkpointed",
+                           NPU_SECURITY_PROFILE=security, NPU_ASCEND_ENV_SCRIPT="/usr/local/Ascend/cann-fixture/set_env.sh")
+                fixture_command = command.replace("--output-dir", '--npu-host-root "$FIXTURE_HOST" --output-dir', 1)
+                result = subprocess.run([BASH, "-eu", "-c", fixture_command], cwd=ROOT, env=env, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                generated = root / "generated"
+                profile = json.loads((generated / "stress-profile.json").read_text())
+                self.assertEqual(profile["npu"]["host_device_ids"], list(ids))
+                self.assertEqual(profile["npu"]["privileged"], security == "legacy-privileged")
+                cfg = (generated / "catmonitor-stress.yaml").read_text()
+                self.assertIn("container: a2-transfer-cpu", cfg)
+                self.assertIn("container: a2-transfer-npu", cfg)
+                self.assertIn("allowed_npu_devices: [0,1]", cfg)
+                workload = (generated / "npu-workload.env").read_text()
+                self.assertIn(f"CATMONITOR_NPU_DEVICE_COUNT={len(ids)}", workload)
+                self.assertIn("NPU_BURN_CHIP_GENERATION=A2", workload)
+                self.assertIn("ASCEND_ENV_SCRIPT=/usr/local/Ascend/cann-fixture/set_env.sh", workload)
+                self.assertIn("CATMONITOR_MODEL_MEMORY_MODE=checkpointed", workload)
+                self.assertIn(str(root / "npu-config"), (generated / "docker-compose.stress.generated.yml").read_text())
 
 
 if __name__ == "__main__":
