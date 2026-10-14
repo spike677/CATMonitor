@@ -1,5 +1,10 @@
 # CATMonitor 容器部署
 
+2026-10-14 A2 模型/算子候选的配套镜像、完整 Compose 命令与管理员启停说明，见
+[A2 NPU Burn 使用指南](NPU_A2_USAGE_GUIDE.md) 和
+[五页使用 PPT](presentations/CATMonitor_A2_NPU_Burn_使用指南.pptx)。
+该指南固定 `5a3537c` 配套镜像，不使用下方历史 `arm64-v0.3.5-stress` 标签。
+
 本地镜像/受限网络见 [受限环境指南](RESTRICTED_ENV_GUIDE.md)；
 新 NPU 兼容候选的修改点和未验范围见 [源码审计](NPU_COMPAT_REVIEW.md)。
 
